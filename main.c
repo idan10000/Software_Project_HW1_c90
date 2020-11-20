@@ -3,47 +3,76 @@
 #include <assert.h>
 
 
-void algorithm(int N, int K, int d, int MAX_ITER, float obs[N][d], float centroids[K][d], int clusters[N],
-               float sums[N][d]);
+void algorithm(int MAX_ITER, float **obs, float **centroids, int *clusters, float **sums);
+
+
+int K, N, d;
 
 int main(int argc, char *argv[]) {
-    const K = atoi(argv[1]);
-    const N = atoi(argv[2]);
-    const d = atoi(argv[3]);
-    const MAX_ITER = atoi(argv[4]);
+    int MAX_ITER;
+    int i;
+    float **obs, **centroids, **sums, **cobs, **ccentroids, **csums;
+    int *clusters, *cclusters;
+    assert(argc == 5);
+    K = atoi(argv[1]);
+    N = atoi(argv[2]);
+    d = atoi(argv[3]);
+    MAX_ITER = atoi(argv[4]);
+
 
     assert(K > 0 && N > 0 && d > 0 && MAX_ITER > 0 && K < N);
 
-    // declare array variables
-    float (*obs)[d] = malloc(sizeof(float) * N * d);
+    /* declare array variables */
+    obs = malloc(sizeof(float *) * N);
     assert(obs != NULL);
-    float (*centroids)[d] = malloc(sizeof(float) * K * d);
-    assert(centroids != NULL);
-    float (*sums)[d] = malloc(K * d * sizeof(float));
-    assert(sums != NULL);
-    int *clusters = malloc(N * sizeof(int));
-    assert(clusters != NULL);
-
-    algorithm(N, K, d, MAX_ITER, obs, centroids, clusters, sums);
-
-    //Printing centroids
-    int i, j;
-    for (i = 0; i < K; ++i) {
-        for (j = 0; j < d-1; ++j) {
-            printf("%.2f%c", centroids[i][j],',');
-        }
-        printf("%.2f%c", centroids[i][d-1],'\n');
+    for (i = 0; i < N; ++i) {
+        obs[i] = malloc(sizeof(float) * d);
+        assert(obs[i] != NULL);
     }
 
-    // free memory
+    centroids = malloc(sizeof(float *) * K);
+    assert(centroids != NULL);
+
+    for (i = 0; i < K; ++i) {
+        centroids[i] = malloc(sizeof(float) * d);
+        assert(centroids[i] != NULL);
+    }
+
+    sums = malloc(sizeof(float *) * K);
+    assert(sums != NULL);
+
+    for (i = 0; i < K; ++i) {
+        sums[i] = malloc(sizeof(float) * d);
+        assert(sums[i] != NULL);
+    }
+
+    clusters = malloc(N * sizeof(int));
+    assert(clusters != NULL);
+
+    csums = sums, cobs = obs, ccentroids = centroids;
+    cclusters = clusters;
+    algorithm(MAX_ITER, cobs, ccentroids, cclusters, csums);
+
+
+    /* free memory */
+    for (i = N - 1; i >= 0; --i) {
+        free(obs[i]);
+    }
     free(obs);
+    for (i = K - 1; i >= 0; --i) {
+        free(centroids[i]);
+    }
     free(centroids);
-    free(clusters);
+    for (i = K - 1; i >= 0; --i) {
+        free(sums[i]);
+    }
     free(sums);
+    free(clusters);
     return 0;
+
 }
 
-void initObs(int N, int K, int d, float obs[N][d], float centroids[K][d]) {
+void initObs(float **obs, float **centroids) {
     char c;
     float f;
     int i, j;
@@ -58,22 +87,26 @@ void initObs(int N, int K, int d, float obs[N][d], float centroids[K][d]) {
 }
 
 
-double norm(int N, int d, float x[d], float cluster[N]) {
-    double sum = 0;
+double norm(float *x, float *cluster) {
+    double sum;
     int i;
+    sum = 0;
     for (i = 0; i < d; ++i) {
         sum += (x[i] - cluster[i]) * (x[i] - cluster[i]);
     }
     return sum;
 }
 
-int assignCluster(int N, int K, int d, float x[d], float centroids[K][d]) {
-    double sum = norm(N, d, x, centroids[0]);
+int assignCluster(float *x, float **centroids) {
+    double sum;
     double tempSum;
-    int minCluster = 0;
+    int minCluster;
     int i;
+    sum = norm(x, centroids[0]);
+    minCluster = 0;
+
     for (i = 1; i < K; ++i) {
-        tempSum = norm(N, d, x, centroids[i]);
+        tempSum = norm(x, centroids[i]);
         if (tempSum < sum) {
             sum = tempSum;
             minCluster = i;
@@ -82,18 +115,18 @@ int assignCluster(int N, int K, int d, float x[d], float centroids[K][d]) {
     return minCluster;
 }
 
-void assignAllObservations(int N, int K, int d, float obs[N][d], float centroids[K][d], int clusters[N]) {
+void assignAllObservations(float **obs, float **centroids, int *clusters) {
     int i;
     for (i = 0; i < N; ++i) {
-        clusters[i] = assignCluster(N, K, d, obs[i], centroids);
+        clusters[i] = assignCluster(obs[i], centroids);
     }
 }
 
-void resetSums(int N, int d, float sums[N][d]) {
+void resetSums(float **sums) {
     int i, j;
-    for (i = 0; i < N; ++i)
+    for (i = 0; i < K; ++i)
         for (j = 0; j < d; ++j)
-            sums[i][j]=0;
+            sums[i][j] = 0;
 }
 
 /**
@@ -108,17 +141,15 @@ void resetSums(int N, int d, float sums[N][d]) {
  * @param d The size of the vector of each observation and centroid
  * @return If any of the centroids were updated
  */
-char updateCentroids(int N, int K, int d, float obs[N][d], float centroids[K][d], int clusters[N], float sums[N][d]) {
-    resetSums(N,d,sums);
-    int clusterSizes[K];
-    char changedAny = 0;
-    float tempCentroid[d];
+char updateCentroids(float **obs, float **centroids, int *clusters, float **sums) {
+    int *clusterSizes;
+    char changedAny;
+    float *tempCentroid;
     int i, j;
-
-    for (i = 0; i < K; ++i) {
-        clusterSizes[i] = 0;
-    }
-
+    resetSums(sums);
+    changedAny = 0;
+    clusterSizes = calloc(K, sizeof(int));
+    tempCentroid = malloc(d * sizeof(float));
     for (i = 0; i < N; ++i) {
         for (j = 0; j < d; ++j) {
             sums[clusters[i]][j] += obs[i][j];
@@ -127,23 +158,36 @@ char updateCentroids(int N, int K, int d, float obs[N][d], float centroids[K][d]
     }
     for (i = 0; i < K; ++i) {
         for (j = 0; j < d; ++j) {
-            tempCentroid[j] = sums[i][j] / clusterSizes[i];
+            if (clusterSizes[i] != 0)
+                tempCentroid[j] = sums[i][j] / clusterSizes[i];
+            else
+                tempCentroid[j] = centroids[i][j];
             if (!changedAny && tempCentroid[j] != centroids[i][j])
                 changedAny = 1;
             centroids[i][j] = tempCentroid[j];
         }
     }
+    free(clusterSizes);
+    free(tempCentroid);
     return changedAny;
 }
 
 
-void algorithm(int N, int K, int d, int MAX_ITER, float obs[N][d], float centroids[K][d], int clusters[N],
-               float sums[N][d]) {
-    initObs(N, K, d, obs, centroids);
-    char changedCluster = 1;
-    int i;
+void algorithm(int MAX_ITER, float **obs, float **centroids, int *clusters, float **sums) {
+    char changedCluster;
+    int i, j;
+    changedCluster = 1;
+    initObs(obs, centroids);
+
     for (i = 0; i < MAX_ITER && changedCluster; ++i) {
-        assignAllObservations(N, K, d, obs, centroids, clusters);
-        changedCluster = updateCentroids(N, K, d, obs, centroids, clusters, sums);
+        assignAllObservations(obs, centroids, clusters);
+        changedCluster = updateCentroids(obs, centroids, clusters, sums);
     }
+    for (i = 0; i < K; ++i) {
+        for (j = 0; j < d - 1; ++j) {
+            printf("%.2f%c", centroids[i][j], ',');
+        }
+        printf("%.2f%c", centroids[i][d - 1], '\n');
+    }
+
 }
