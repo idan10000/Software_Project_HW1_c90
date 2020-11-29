@@ -13,14 +13,20 @@ int main(int argc, char *argv[]) {
     int i;
     float **obs, **centroids, **sums, **cobs, **ccentroids, **csums;
     int *clusters, *cclusters;
-    assert(argc == 5);
+    if(argc != 5){
+        printf("Wrong number of arguments inputted\n");
+        return 1;
+    }
     K = atoi(argv[1]);
     N = atoi(argv[2]);
     d = atoi(argv[3]);
     MAX_ITER = atoi(argv[4]);
 
 
-    assert(K > 0 && N > 0 && d > 0 && MAX_ITER > 0 && K < N);
+    if(K <= 0 || N <= 0 || d <= 0 || MAX_ITER <= 0 || K >= N){
+        printf("argument formatting is incorrect\n");
+        return 1;
+    }
 
     /* declare array variables */
     obs = malloc(sizeof(float *) * N);
@@ -78,7 +84,8 @@ void initObs(float **obs, float **centroids) {
     int i, j;
     for (i = 0; i < N; ++i) {
         for (j = 0; j < d; ++j) {
-            assert(scanf("%f%c", &f, &c) == 2);
+            if(scanf("%f%c", &f, &c) != 2)
+                printf("Wrong input");
             if (i < K)
                 centroids[i][j] = f;
             obs[i][j] = f;
